@@ -55,44 +55,64 @@ show(frame)
 
 # %%
 
+
+bottom_height = 12
+pants_height = 67
+pants_width = 35
+dress_height = 102
+
 plank_width = width / 2 - sub_depth - 2 * thickness
 plank_horizontal_location = plank_width / 2 + thickness
+
 with BuildPart() as full_plank:
     Box(plank_width, inner_depth, thickness)
 
-bottom_height = 12
-pants_height = 63
-dress_height = 110
+bottom_y = bottom_height + offset
+pants_y = bottom_y + pants_height + thickness
+
+pants_plank_width = pants_width + thickness
+with BuildPart() as pants_plank:
+    Box(pants_plank_width, inner_depth - thickness, thickness)
+
+with BuildPart() as pants_side:
+    Box(thickness, inner_depth - thickness, pants_height)
+
+dress_y = pants_y + dress_height + thickness
 
 plank_children = [
     copy.copy(full_plank.part).locate(
         Location((
             plank_horizontal_location,
             inner_depth / 2,
-            bottom_height + offset
+            bottom_y
         ))
     ),
-    copy.copy(full_plank.part).locate(
+    copy.copy(pants_plank.part).locate(
         Location((
-            plank_horizontal_location,
+            -pants_plank_width / 2 + thickness + plank_width,
             inner_depth / 2,
-            bottom_height + pants_height + offset
+            pants_y
+        ))
+    ),
+    copy.copy(pants_side.part).locate(
+        Location((
+            plank_width - pants_plank_width + offset + thickness,
+            inner_depth / 2,
+            bottom_y + pants_height / 2 + offset
         ))
     ),
 ]
 
-top_secionbottom = bottom_height + pants_height + dress_height + thickness
-top_section_height = height - top_secionbottom - thickness
+top_section_height = side_height - dress_y
 plank_count = 3
-top_plank_space = top_section_height / plank_count + offset
-
+top_plank_space = (top_section_height + offset) / plank_count
 
 plank_children += [
     copy.copy(full_plank.part).locate(
         Location((
             plank_horizontal_location,
             inner_depth / 2,
-            top_plank_space * i + top_secionbottom
+            top_plank_space * i + dress_y
         ))
     ) for i in range(plank_count)
 ]
@@ -103,7 +123,8 @@ show(planks)
 # %%
 
 wheel_height = 2.8
-sub_height = side_height - thickness * 2 - wheel_height
+rail_height = 4
+sub_height = side_height - thickness * 2 - wheel_height - rail_height
 sub_lift = offset + wheel_height
 sub_plank_width = sub_depth - thickness
 
@@ -174,15 +195,16 @@ show(sub_closet)
 
 open_sub_depth = inner_depth / 2
 
+# mirror twice to group together in exploded view.
 closet = Compound(children=[
-    frame,
-    planks,
-    copy.copy(planks).locate(
-        Location((width / 2 + sub_depth, 0, 0))
+    mirror(mirror(copy.copy(frame))),
+    mirror(mirror(copy.copy(planks))),
+    mirror(copy.copy(planks), about=Plane.YZ).locate(
+        Location((width, 0, 0))
     ),
-    copy.copy(sub_closet).locate(
+    mirror(mirror(copy.copy(sub_closet).locate(
         Location((width / 2 - sub_depth + offset, - open_sub_depth, 0))
-    ),
+    ))),
     mirror(copy.copy(sub_closet), about=Plane.YZ).locate(
         Location((width / 2 + sub_depth - offset, - inner_depth, 0))
     ),
