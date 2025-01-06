@@ -465,32 +465,32 @@ def flatten(part):
     parts = []
 
     if isinstance(part, Compound):
-        comps = part.compounds()
+        comps = part.children if len(part.children) else part.compounds()
         for child in comps:
             if child is not part:
                 parts.extend(flatten(child))
-        else:
-            # Get bounding box dimensions
-            bbox = part.bounding_box()
-            dims = [
-                bbox.max.X - bbox.min.X,
-                bbox.max.Y - bbox.min.Y,
-                bbox.max.Z - bbox.min.Z
-            ]
-            dims = [d * 10 for d in dims]  # Convert to mm
-            dims.sort()
-            thickness = dims[0]
+            else:
+                # Get bounding box dimensions
+                bbox = part.bounding_box()
+                dims = [
+                    bbox.max.X - bbox.min.X,
+                    bbox.max.Y - bbox.min.Y,
+                    bbox.max.Z - bbox.min.Z
+                ]
+                dims = [d * 10 for d in dims]  # Convert to mm
+                dims.sort()
+                thickness = dims[0]
 
-            # Only include wooden parts that match known thicknesses
-            wood_thicknesses = [
-                thickness * 10,
-                back_thickness * 10,
-                sub_back_thickness * 10
-            ]
-            if any(abs(d - t) < 0.1 for d in dims for t in wood_thicknesses):
-                # Try to get name from part's label attribute if it exists
-                name = getattr(part, "label", "")
-                parts.append(WoodPart(dims[1], dims[2], thickness, name))
+                # Only include wooden parts that match known thicknesses
+                wood_thicknesses = [
+                    thickness * 10,
+                    back_thickness * 10,
+                    sub_back_thickness * 10
+                ]
+                if any(abs(d - t) < 0.1 for d in dims for t in wood_thicknesses):
+                    # Try to get name from part's label attribute if it exists
+                    name = getattr(part, "label", "")
+                    parts.append(WoodPart(dims[1], dims[2], thickness, name))
     else:
         print(f"Skipping part of type {type(part)}")
 
@@ -511,7 +511,7 @@ def export_wood_parts(part):
 
     sorted_parts = sorted(
         part_counts.items(),
-        key=lambda x: (x[0].thickness, x[0].width, x[0].height)
+        key=lambda x: (-x[1][0], x[0].thickness, x[0].width, x[0].height)  # Changed sorting key
     )
 
     print("\nWood parts list (dimensions in mm):")
@@ -530,9 +530,6 @@ def export_wood_parts(part):
 
 
 # Call the function on the closet
-print(sub_closet_left.children)
-print(sub_closet_right.children)
-print(sub_closet_right.compounds())
 export_wood_parts(closet)
 
 
