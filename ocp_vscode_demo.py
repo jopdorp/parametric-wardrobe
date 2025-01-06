@@ -465,10 +465,11 @@ def flatten(part):
     parts = []
 
     if isinstance(part, Compound):
-        if len(part.children) > 0:
-            for child in part.children:
+        comps = part.compounds()
+        for child in comps:
+            if child is not part:
                 parts.extend(flatten(child))
-        else:           
+        else:
             # Get bounding box dimensions
             bbox = part.bounding_box()
             dims = [
@@ -529,6 +530,9 @@ def export_wood_parts(part):
 
 
 # Call the function on the closet
+print(sub_closet_left.children)
+print(sub_closet_right.children)
+print(sub_closet_right.compounds())
 export_wood_parts(closet)
 
 
