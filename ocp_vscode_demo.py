@@ -7,18 +7,31 @@
 
 # %%
 
-from build123d import BuildPart, Box, Location, Compound, copy, mirror, Plane
+from build123d import (
+    BuildPart,
+    Box,
+    Location,
+    Compound,
+    copy,
+    mirror,
+    Plane,
+    Cylinder,
+    Rotation,
+)
 from ocp_vscode import show
 
 thickness = 1.8
 
 width = 174.5
 height = 264.5
-depth = 59
-inner_depth = 59 - thickness
+depth_budget = 59
+mirror_thickness = 0.4
 sub_depth = 30
-offset = thickness / 2
 
+door_thickness = thickness + mirror_thickness
+depth = depth_budget + door_thickness
+inner_depth = depth - thickness
+offset = thickness / 2
 side_height = height - thickness
 
 with BuildPart() as side:
@@ -56,10 +69,14 @@ show(frame)
 # %%
 
 
-bottom_height = 12
-pants_height = 67
-pants_width = 35
-dress_height = 102
+bottom_height = 13
+pants_height = 65
+pants_width = 34
+dress_height = 102.5
+
+rail_height = 3
+rail_width = 1.5
+rail_spacing = 4.5
 
 plank_width = width / 2 - sub_depth - 2 * thickness
 plank_horizontal_location = plank_width / 2 + thickness
@@ -77,6 +94,9 @@ with BuildPart() as pants_plank:
 with BuildPart() as pants_side:
     Box(thickness, inner_depth - thickness, pants_height)
 
+with BuildPart() as rail:
+    Cylinder(rail_height / 2, plank_width, rotation=(0, 90, 0))
+
 dress_y = pants_y + dress_height + thickness
 
 plank_children = [
@@ -92,6 +112,13 @@ plank_children = [
             -pants_plank_width / 2 + thickness + plank_width,
             inner_depth / 2,
             pants_y
+        ))
+    ),
+    copy.copy(rail.part).locate(
+        Location((
+            plank_horizontal_location,
+            inner_depth / 2,
+            dress_y - offset - rail_height / 2 - rail_spacing
         ))
     ),
     copy.copy(pants_side.part).locate(
@@ -119,11 +146,10 @@ plank_children += [
 planks = Compound(children=plank_children)
 
 show(planks)
-
 # %%
 
 wheel_height = 2.8
-rail_height = 4
+rail_height = 1.91
 sub_height = side_height - thickness * 2 - wheel_height - rail_height
 sub_lift = offset + wheel_height
 sub_plank_width = sub_depth - thickness
