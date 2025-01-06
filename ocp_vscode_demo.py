@@ -91,12 +91,15 @@ def get_plank_heights(pants_height):
 ###############################################################################
 with BuildPart() as side:
     Box(thickness, inner_depth, side_height)
+    side.part.label = "Side panel"
 
 with BuildPart() as top:
     Box(width, inner_depth, thickness)
+    top.part.label = "Top panel"
 
 with BuildPart() as back:
     Box(width, back_thickness, height)
+    back.part.label = "Back panel"
 
 sides_right = Part(Compound(children=[
     copy.copy(side.part).locate(
@@ -232,27 +235,31 @@ hardware = Compound(children=[
 ])
 hardware.color = Color(0.7, 0.7, 0.7)
 show(hardware)
+
+
 # %%
 ###############################################################################
 #                          PLANK SYSTEM ASSEMBLY                              #
 #              Creates internal organization system and hangers               #
 ###############################################################################
-
-
 def create_planks(pants_height):
     bottom_y, pants_y, dress_y = get_plank_heights(pants_height)
     with BuildPart() as full_plank:
         Box(plank_width, inner_depth, thickness)
+        full_plank.part.label = "Full plank"
 
     with BuildPart() as bottom_front_plank:
         Box(plank_width, thickness, bottom_height)
+        bottom_front_plank.part.label = "Bottom front plank"
 
     pants_plank_width = pants_width + thickness
     with BuildPart() as pants_plank:
         Box(pants_plank_width, inner_depth - thickness, thickness)
+        pants_plank.part.label = "Pants plank"
 
     with BuildPart() as pants_side:
         Box(thickness, inner_depth - thickness, pants_height)
+        pants_side.part.label = "Pants side"
 
     plank_children = [
         copy.copy(full_plank.part).locate(
@@ -308,23 +315,28 @@ planks_right = Part(mirror(planks_right, about=Plane.YZ))
 planks_right.color = Color(0.8, 0.7, 0.5)
 
 show(planks_left, planks_right)
-# %%
 
+
+# %%
 ###############################################################################
 #                           SUB CLOSET ASSEMBLY                               #
 #                 Creates the smaller storage compartments                    #
 ###############################################################################
 with BuildPart() as sub_back:
     Box(sub_back_thickness, inner_depth, sub_height)
+    sub_back.part.label = "Sub closet back"
 
 with BuildPart() as sub_side:
     Box(sub_depth - sub_back_thickness, thickness, sub_height)
+    sub_side.part.label = "Sub closet side"
 
 with BuildPart() as sub_top:
     Box(sub_depth, inner_depth, thickness)
+    sub_top.part.label = "Sub closet top/bottom"
 
 with BuildPart() as sub_plank:
     Box(sub_plank_depth, sub_plank_width, thickness)
+    sub_plank.part.label = "Sub closet plank"
 
 sub_plank_count = 10
 
@@ -395,6 +407,8 @@ sub_closet_right = mirror(copy.copy(sub_closet), about=Plane.YZ).locate(
 sub_closet_right.color = Color(0.7, 0.5, 0.3)
 
 show(sub_closet_left, sub_closet_right)
+
+
 # %%
 
 ###############################################################################
@@ -403,7 +417,6 @@ show(sub_closet_left, sub_closet_right)
 ###############################################################################
 
 # mirror twice to group together in exploded view.
-
 closet_children = [
     frame,
     hardware,
@@ -418,4 +431,105 @@ closet = Compound(children=closet_children)
 
 
 show(closet_children)
+
+
+# %%
+###############################################################################
+#                           WOOD PARTS EXPORTER                               #
+#                Extracts all wooden parts from the closet model              #
+#           and prints a list of unique parts with their dimensions           #
+###############################################################################
+class WoodPart:
+    def __init__(self, width, height, thickness, name=""):
+        # Round dimensions to 1 decimal place and sort width/height
+        self.width = round(min(width, height), 1)
+        self.height = round(max(width, height), 1)
+        self.thickness = round(thickness, 1)
+        self.name = name
+
+    def __eq__(self, other):
+        return (abs(self.width - other.width) < 0.1 and 
+                abs(self.height - other.height) < 0.1 and 
+                abs(self.thickness - other.thickness) < 0.1)
+
+    def __hash__(self):
+        # Use rounded values for hash
+        return hash((
+            round(self.width),
+            round(self.height),
+            round(self.thickness)
+        ))
+
+
+def flatten(part):
+    parts = []
+
+    if isinstance(part, Compound):
+        if len(part.children) > 0:
+            for child in part.children:
+                parts.extend(flatten(child))
+        else:           
+            # Get bounding box dimensions
+            bbox = part.bounding_box()
+            dims = [
+                bbox.max.X - bbox.min.X,
+                bbox.max.Y - bbox.min.Y,
+                bbox.max.Z - bbox.min.Z
+            ]
+            dims = [d * 10 for d in dims]  # Convert to mm
+            dims.sort()
+            thickness = dims[0]
+
+            # Only include wooden parts that match known thicknesses
+            wood_thicknesses = [
+                thickness * 10,
+                back_thickness * 10,
+                sub_back_thickness * 10
+            ]
+            if any(abs(d - t) < 0.1 for d in dims for t in wood_thicknesses):
+                # Try to get name from part's label attribute if it exists
+                name = getattr(part, "label", "")
+                parts.append(WoodPart(dims[1], dims[2], thickness, name))
+    else:
+        print(f"Skipping part of type {type(part)}")
+
+    return parts
+
+
+def export_wood_parts(part):
+    parts = flatten(part)
+
+    part_counts = {}
+    for part in parts:
+        if part in part_counts:
+            part_counts[part][0] += 1
+            if part.name and part.name not in part_counts[part][1]:
+                part_counts[part][1].append(part.name)
+        else:
+            part_counts[part] = [1, [part.name] if part.name else []]
+
+    sorted_parts = sorted(
+        part_counts.items(),
+        key=lambda x: (x[0].thickness, x[0].width, x[0].height)
+    )
+
+    print("\nWood parts list (dimensions in mm):")
+    print("------------------------------------")
+    max_dims_len = max(
+        len(f"{p[0].width:.1f}x{p[0].height:.1f}") for p in sorted_parts
+    )
+
+    for part, (count, names) in sorted_parts:
+        dims = f"{part.width:.1f}x{part.height:.1f}".ljust(max_dims_len)
+        names_str = ", ".join(filter(None, names))
+        print(
+            f"{str(count).rjust(2)} * \
+{dims} (thickness: {part.thickness:.1f}mm) - {names_str}"
+        )
+
+
+# Call the function on the closet
+export_wood_parts(closet)
+
+
 # %%
