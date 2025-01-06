@@ -34,7 +34,7 @@ width = 174.5
 height = 264.5
 depth_budget = 59.0
 mirror_thickness = 0.4
-sub_depth = 30.0
+sub_depth = 30.1
 inner_margin = 0.6
 
 wheel_height = 2.8
@@ -55,7 +55,9 @@ pants_height_right = 63.0
 
 # Derived parameters
 door_thickness = thickness + mirror_thickness
-depth = depth_budget + door_thickness
+door_margin = 0.2
+
+depth = depth_budget - door_thickness
 inner_depth = depth - back_thickness
 offset = thickness / 2
 back_offset = back_thickness / 2
@@ -72,7 +74,7 @@ sub_lift = offset + wheel_height
 sub_back_offset = sub_back_thickness / 2
 
 sub_plank_depth = sub_depth - sub_back_thickness
-sub_plank_width = inner_depth - thickness * 2
+sub_plank_width = inner_depth - thickness
 
 open_sub_depth = inner_depth / 2
 
@@ -178,6 +180,9 @@ rails = Compound(children=[
 show(rails)
 
 # %%
+###############################################################################
+#                               HANGING BARS                                  #
+###############################################################################
 with BuildPart() as bar_cylinder:
     Cylinder(bar_width / 2, plank_width, rotation=(0, 90, 0))
 
@@ -235,6 +240,54 @@ hardware = Compound(children=[
 ])
 hardware.color = Color(0.7, 0.7, 0.7)
 show(hardware)
+
+
+# %%
+##############################################################################
+#                            DOOR SYSTEM ASSEMBLY                            #
+#                Creates the doors with mirrors and handles                  #
+##############################################################################
+door_width = plank_width + thickness * 2 - door_margin * 2
+with BuildPart() as door_wood:
+    Box(door_width, thickness, height)
+    door_wood.part.label = "Door"
+
+with BuildPart() as door_mirror:
+    Box(door_width, mirror_thickness, height)
+
+door = Compound(children=[
+    copy.copy(door_wood.part),
+    copy.copy(door_mirror.part).locate(
+        Location((
+            0,
+            -thickness/2 - mirror_thickness/2,
+            0,
+        ))
+    )
+])
+
+door_left = copy.copy(door).locate(
+    Location((
+        plank_horizontal_location,
+        -thickness/2 - door_margin,
+        height/2
+    ))
+)
+door_left.color = Color(0.8, 0.8, 0.8)
+door_left.label = "Door"
+
+door_right = mirror(copy.copy(door), about=Plane.YZ).locate(
+    Location((
+        width - plank_horizontal_location,
+        -thickness/2 - door_margin,
+        height/2
+    ))
+)
+door_right.color = Color(0.8, 0.8, 0.8)
+door_right.label = "Door"
+
+doors = Compound(children=[door_left, door_right])
+show(doors)
 
 
 # %%
@@ -426,6 +479,7 @@ closet_children = [
     ),
     sub_closet_left,
     sub_closet_right,
+    doors
 ]
 closet = Compound(children=closet_children)
 
@@ -487,7 +541,8 @@ def flatten(part):
                     back_thickness * 10,
                     sub_back_thickness * 10
                 ]
-                if any(abs(d - t) < 0.1 for d in dims for t in wood_thicknesses):
+                if any(abs(d - t) < 0.1 
+                       for d in dims for t in wood_thicknesses):
                     # Try to get name from part's label attribute if it exists
                     name = getattr(part, "label", "")
                     parts.append(WoodPart(dims[1], dims[2], thickness, name))
@@ -511,7 +566,7 @@ def export_wood_parts(part):
 
     sorted_parts = sorted(
         part_counts.items(),
-        key=lambda x: (-x[1][0], x[0].thickness, x[0].width, x[0].height)  # Changed sorting key
+        key=lambda x: (-x[1][0], x[0].thickness, x[0].width, x[0].height)
     )
 
     print("\nWood parts list (dimensions in mm):")
