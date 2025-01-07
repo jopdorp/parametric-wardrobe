@@ -34,7 +34,7 @@ width = 174.5
 height = 264.5
 depth_budget = 59.0
 mirror_thickness = 0.4
-sub_depth = 30.1
+sub_depth = 30.05
 inner_margin = 0.6
 
 wheel_height = 2.8
@@ -74,7 +74,8 @@ sub_lift = offset + wheel_height
 sub_back_offset = sub_back_thickness / 2
 
 sub_plank_depth = sub_depth - sub_back_thickness
-sub_plank_width = inner_depth - thickness
+sub_plank_width = inner_depth - thickness + mirror_thickness
+sub_width = inner_depth + door_thickness
 
 open_sub_depth = inner_depth / 2
 
@@ -143,36 +144,41 @@ show(frame)
 #                                    RAILS                                    #
 #                      Connects the subclosets to the frame                   #
 ###############################################################################
+
 sub_rail = import_step("rail.stp")
-sub_rail = Part(sub_rail.children[0])
-sub_rail = sub_rail.rotate(axis=Axis.X, angle=-90)
+
+sub_rail_right = Part(sub_rail.children[0])
+sub_rail_left = Part(sub_rail.children[1])
+
+sub_rail_right = sub_rail_right.rotate(axis=Axis.X, angle=-90)
+sub_rail_left = sub_rail_left.rotate(axis=Axis.X, angle=-90)
 
 rails = Compound(children=[
-    copy.copy(sub_rail).transform_geometry(Matrix(
+    copy.copy(sub_rail_left).transform_geometry(Matrix(
         (
             (0.1, 0, 0, 0),
-            (0, 0.055, 0, 0),
+            (0, 0.06, 0, 0),
             (0, 0, 0.1, 0),
             (0, 0, 0, 1)
         )
     )).locate(
         Location((
-            width / 2 - sub_depth / 2 + sub_back_offset - 2/3 * inner_margin,
-            inner_depth,
+            width / 2 - sub_depth / 2 + sub_back_offset - 2/3 * inner_margin - 22,
+            inner_depth + 32,
             side_height
         ))
     ),
-    copy.copy(sub_rail).transform_geometry(Matrix(
+    copy.copy(sub_rail_right).transform_geometry(Matrix(
         (
             (0.1, 0, 0, 0),
-            (0, 0.073, 0, 0),
+            (0, 0.06, 0, 0),
             (0, 0, 0.1, 0),
             (0, 0, 0, 1)
         )
     )).locate(
         Location((
             width / 2 + sub_depth / 2 - sub_back_offset + 2/3 * inner_margin,
-            inner_depth,
+            inner_depth - 6,
             side_height
         ))
     )
@@ -376,7 +382,7 @@ show(planks_left, planks_right)
 #                 Creates the smaller storage compartments                    #
 ###############################################################################
 with BuildPart() as sub_back:
-    Box(sub_back_thickness, inner_depth, sub_height)
+    Box(sub_back_thickness, sub_width, sub_height)
     sub_back.part.label = "Sub closet back"
 
 with BuildPart() as sub_side:
@@ -384,7 +390,7 @@ with BuildPart() as sub_side:
     sub_side.part.label = "Sub closet side"
 
 with BuildPart() as sub_top:
-    Box(sub_depth, inner_depth, thickness)
+    Box(sub_depth,  sub_width, thickness)
     sub_top.part.label = "Sub closet top/bottom"
 
 with BuildPart() as sub_plank:
@@ -397,43 +403,43 @@ sub_closet_children = [
     copy.copy(sub_back.part).locate(
         Location((
             sub_depth - sub_back_thickness,
-            inner_depth / 2,
+            sub_width / 2,
             sub_height / 2 + sub_lift + offset
         ))
     ),
     copy.copy(sub_side.part).locate(
         Location((
             sub_depth / 2 - sub_back_thickness,
-            inner_depth - offset,
+            sub_width - offset,
             sub_height / 2 + sub_lift + offset
         ))
     ),
     copy.copy(sub_side.part).locate(
         Location((
             sub_depth / 2 - sub_back_thickness,
-            offset,
+            0 + offset,
             sub_height / 2 + sub_lift + offset
         ))
     ),
     copy.copy(sub_top.part).locate(
         Location((
             sub_depth / 2 - sub_back_offset,
-            inner_depth / 2,
+            sub_width / 2,
             sub_height + sub_lift + thickness
         ))
     ),
     copy.copy(sub_top.part).locate(
         Location((
             sub_depth / 2 - sub_back_offset,
-            inner_depth / 2,
+            sub_width / 2,
             sub_lift
         ))
     ),
 ] + [
     copy.copy(sub_plank.part).locate(
         Location((
-            sub_plank_depth / 2 - back_offset,
-            inner_depth / 2,
+            sub_plank_depth / 2 - sub_back_offset,
+            sub_width / 2,
             (i + 1) * sub_height / sub_plank_count + sub_lift + thickness
         ))
     ) for i in range(sub_plank_count) if i < sub_plank_count - 1
@@ -445,7 +451,7 @@ sub_closet.color = Color(0.7, 0.5, 0.3)
 sub_closet_left = copy.copy(sub_closet).locate(
     Location((
         width / 2 - sub_depth + sub_back_offset - 2/3 * inner_margin,
-        -open_sub_depth,
+        - door_thickness,
         0
     ))
 )
@@ -453,7 +459,7 @@ sub_closet_left = copy.copy(sub_closet).locate(
 sub_closet_right = mirror(copy.copy(sub_closet), about=Plane.YZ).locate(
     Location((
         width / 2 + sub_depth - sub_back_offset + 2/3 * inner_margin,
-        -inner_depth,
+        -depth - offset,
         0
     ))
 )
