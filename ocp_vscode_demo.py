@@ -19,10 +19,15 @@ from build123d import (
     import_step,
     Matrix,
     Color,
-    Part
+    Part,
+    chamfer,
 )
 from ocp_vscode import show
+import math
 
+# Manually set port
+from ocp_vscode.comms import CMD_PORT, set_port
+set_port(3939)  # Use a specific port number
 ###############################################################################
 #                              GLOBAL PARAMETERS                              #
 #                    CUSTOMIZE THE SIZES TO FIT YOUR NEEDS                    #
@@ -86,59 +91,201 @@ def get_plank_heights(pants_height):
     dress_y = pants_y + dress_height + thickness
     return bottom_y, pants_y, dress_y
 
+# %%
+
+# Define standard dowel sizes based on 12mm & 18mm wood thickness
+# METRIC_DOWEL_SIZES = {
+#     "6mm": (0.6, 3),  # Diameter, Length
+#     "8mm": (0.8, 4),
+#     "10mm": (1, 5),
+# }
+
+# class WoodenDowel(Part):
+#     def __init__(self, size: str):
+#         """Create a wooden dowel with rounded ends.
+
+#         Args:
+#             size (str): The dowel size (6mm, 8mm, or 10mm).
+#         """
+#         if size not in METRIC_DOWEL_SIZES:
+#             raise ValueError(f"Invalid size {size}. Choose from {list(METRIC_DOWEL_SIZES.keys())}")
+
+#         diameter, length = METRIC_DOWEL_SIZES[size]
+#         radius = diameter / 2
+#         filletlength = radius * 0.5  # Adjust rounding for realistic dowel ends
+
+#         with BuildPart() as dowel:
+#             Cylinder(radius, length)  # Create main dowel
+            
+#             # Select circular edges at the top and bottom
+#             top_edge = dowel.edges().sort_by(Axis.Z)[-1]  # Highest edge
+#             bottom_edge = dowel.edges().sort_by(Axis.Z)[0]  # Lowest edge
+
+#             # Apply fillet correctly using the function, not as a method
+#             chamfer([top_edge, bottom_edge], angle=30, length=filletlength)
+
+#         super().__init__(dowel.part)
+
+# # Example: Create an 8mm dowel for 18mm wood
+# dowel_8mm = WoodenDowel("8mm")
+# show(dowel_8mm)
+
+# # %%
+
+# ###############################################################################
+# #                            DOWEL PLACEMENT                                 #
+# #              Adding dowels along edges where panels connect                #
+# ###############################################################################
+# def face_normal(face):
+#     verts = face.vertices()
+#     if len(verts) < 3:
+#         return (0, 0, 1)
+#     # Use the first three vertices to compute a normal.
+#     v1, v2, v3 = verts[:3]
+#     a = (v2.X - v1.X, v2.Y - v1.Y, v2.Z - v1.Z)
+#     b = (v3.X - v1.X, v3.Y - v1.Y, v3.Z - v1.Z)
+#     # Cross product
+#     cross = (a[1]*b[2] - a[2]*b[1],
+#              a[2]*b[0] - a[0]*b[2],
+#              a[0]*b[1] - a[1]*b[0])
+#     mag = math.sqrt(cross[0]**2 + cross[1]**2 + cross[2]**2)
+#     if mag == 0:
+#         return (0, 0, 1)
+#     return (cross[0]/mag, cross[1]/mag, cross[2]/mag)
+
+# def vector_angle(v1, v2):
+#     # Compute the angle between two normalized vectors.
+#     dot = sum(a*b for a, b in zip(v1, v2))
+#     # Clamp to avoid precision errors.
+#     dot = max(min(dot, 1), -1)
+#     return math.acos(dot)
+
+# def cross_product(v1, v2):
+#     return (
+#         v1[1]*v2[2] - v1[2]*v2[1],
+#         v1[2]*v2[0] - v1[0]*v2[2],
+#         v1[0]*v2[1] - v1[1]*v2[0]
+#     )
+
+# from OCP.gp import gp_Ax1, gp_Pnt, gp_Dir
+
+# def tuple_to_ax1(axis_tuple):
+#     # Convert a tuple (x, y, z) to a gp_Ax1, setting the origin at (0,0,0)
+#     return gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(*axis_tuple))
+
+# def create_dowels_between_panels(panel_side_dowels, panel_front_dowels, spacing=10):
+#     front_center = panel_front_dowels.center()
+#     all_faces = panel_side_dowels.faces()
+#     closest_face = min(all_faces, key=lambda face: vector_distance(face.center(), front_center))
+    
+#     closest_face_short_edge = closest_face.edges().sort_by(Axis.Y)[0]
+#     center = closest_face_short_edge.center()
+    
+#     long_edge = closest_face.edges().sort_by(Axis.Y)[1]
+#     length = long_edge.length
+#     dowel_count = int(length / spacing) - 1
+#     dowels = [
+#         WoodenDowel("8mm").locate(
+#             Location((
+#                 center.X,
+#                 center.Y + 1 + i * spacing,
+#                 center.Z
+#             ))
+#         )
+#         for i in range(dowel_count)
+#     ]
+    
+#     # Rotate dowels so they are perpendicular to the face.
+#     default_axis = (0, 0, 1)
+#     n = face_normal(closest_face)
+#     angle = vector_angle(default_axis, n)
+#     rot_axis = cross_product(default_axis, n)
+#     if math.sqrt(sum(c * c for c in rot_axis)) != 0:
+#         rotation_axis = tuple_to_ax1(rot_axis)
+#         for dowel in dowels:
+#             dowel.rotate(axis=rotation_axis, angle=angle)
+        
+#     return Compound(dowels)
+    
+# # Example: Create dowels between two panels
+# with BuildPart() as panel_side:
+#     Box(2, 200, 20)
+#     panel_side.part.label = "Side panel"
+
+# with BuildPart() as panel_front:
+#     Box(2, 200, 20)
+#     panel_front.part.label = "Front panel"
+
+# # rotate and locate the panels
+# panel_side = copy(panel_side.part).rotate(axis=Axis.Y, angle=90)
+# panel_front = copy(panel_front.part).locate(Location((11, 0, 9)))
+
+# dowels = create_dowels_between_panels(panel_side, panel_front)
+# show([panel_front, panel_side, dowels])
+# %%
+def vector_distance(v1, v2):
+    return ((v1.X - v2.X)**2 + (v1.Y - v2.Y)**2 + (v1.Z - v2.Z)**2)**0.5
 
 # %%
 ###############################################################################
 #                             MAIN FRAME ASSEMBLY                             #
 #                   Includes sides, top, back, and rails                      #
 ###############################################################################
-with BuildPart() as side:
-    Box(thickness, inner_depth, side_height)
-    side.part.label = "Side panel"
+def make_frame():
+    with BuildPart() as side:
+        Box(thickness, inner_depth, side_height)
+        side.part.label = "Side panel"
 
-with BuildPart() as top:
-    Box(width, inner_depth, thickness)
-    top.part.label = "Top panel"
+    with BuildPart() as top:
+        Box(width, inner_depth, thickness)
+        top.part.label = "Top panel"
 
-with BuildPart() as back:
-    Box(width, back_thickness, height)
-    back.part.label = "Back panel"
+    with BuildPart() as back:
+        Box(width, back_thickness, height)
+        back.part.label = "Back panel"
 
-sides_right = Part(Compound(children=[
-    copy.copy(side.part).locate(
-        Location((width - offset, inner_depth / 2, side_height / 2))
-    ),
-    copy.copy(side.part).locate(
-        Location((
-            width - thickness - offset - plank_width,
-            inner_depth / 2,
-            side_height / 2
-        ))
-    ),
-]))
+    # Define panel positions
+    left_side_pos = (offset, inner_depth / 2, side_height / 2)
+    middle_left_pos = (plank_width + thickness + offset, inner_depth / 2, side_height / 2)
+    middle_right_pos = (width - thickness - offset - plank_width, inner_depth / 2, side_height / 2)
+    right_side_pos = (width - offset, inner_depth / 2, side_height / 2)
+    top_pos = (width / 2, inner_depth / 2, side_height + offset)
+    back_pos = (width / 2, depth - back_offset, height / 2)
 
-frame = Compound(children=[
-    copy.copy(side.part).locate(
-        Location((offset, inner_depth / 2, side_height / 2))
-    ),
-    copy.copy(side.part).locate(
-        Location((
-            plank_width + thickness + offset,
-            inner_depth / 2,
-            side_height / 2
-        ))
-    ),
-    sides_right,
-    copy.copy(top.part).locate(
-        Location((width / 2, inner_depth / 2, side_height + offset))
-    ),
-    copy.copy(back.part).locate(
-        Location((width / 2, depth - back_offset, height / 2))
-    )
-])
+    frame_left_side = copy(side.part).locate(Location(left_side_pos))
+    frame_middle_left = copy(side.part).locate(Location(middle_left_pos))
+    frame_middle_right = copy(side.part).locate(Location(middle_right_pos))
+    frame_right_side = copy(side.part).locate(Location(right_side_pos))
+    frame_top = copy(top.part).locate(Location(top_pos))
+    frame_back = copy(back.part).locate(Location(back_pos))
 
-frame.color = Color(0.7, 0.5, 0.2)
+
+    # left_top_dowels = create_dowels_between_panels(frame_left_side, frame_top)
+    # create_dowels_between_panels(frame_middle_left, frame_top)
+    # create_dowels_between_panels(frame_middle_right, frame_top)
+    # create_dowels_between_panels(frame_right_side, frame_top)
+
+    # create_dowels_between_panels(frame_left_side, frame_back)
+    # create_dowels_between_panels(frame_middle_left, frame_back)
+    # create_dowels_between_panels(frame_middle_right, frame_back)
+    # create_dowels_between_panels(frame_right_side, frame_back)
+
+    # show(left_top_dowels)
+
+    return Compound(children=[
+        frame_left_side,
+        frame_middle_left,
+        frame_middle_right,
+        frame_right_side,
+        frame_top,
+        frame_back,
+    ]) 
+
+# Create the frame
+frame = make_frame()
 show(frame)
+
+
 # %%
 ###############################################################################
 #                                    RAILS                                    #
@@ -154,7 +301,7 @@ sub_rail_right = sub_rail_right.rotate(axis=Axis.X, angle=-90)
 sub_rail_left = sub_rail_left.rotate(axis=Axis.X, angle=-90)
 
 rails = Compound(children=[
-    copy.copy(sub_rail_left).transform_geometry(Matrix(
+    copy(sub_rail_left).transform_geometry(Matrix(
         (
             (0.1, 0, 0, 0),
             (0, 0.06, 0, 0),
@@ -168,7 +315,7 @@ rails = Compound(children=[
             side_height
         ))
     ),
-    copy.copy(sub_rail_right).transform_geometry(Matrix(
+    copy(sub_rail_right).transform_geometry(Matrix(
         (
             (0.1, 0, 0, 0),
             (0, 0.06, 0, 0),
@@ -195,9 +342,9 @@ with BuildPart() as bar_cylinder:
 with BuildPart() as bar_box:
     Box(plank_width, bar_width, bar_height - bar_width)
 
-bar = Part(shapes=[
-    copy.copy(bar_cylinder.part) +
-    copy.copy(bar_cylinder.part).locate(
+bar = Part([
+    copy(bar_cylinder.part) +
+    copy(bar_cylinder.part).locate(
         Location((
             0,
             0,
@@ -216,7 +363,7 @@ bar = Part(shapes=[
 
 _, _, dress_y_left = get_plank_heights(pants_height_left)
 
-bar_left = copy.copy(bar).locate(
+bar_left = copy(bar).locate(
     Location((
         plank_horizontal_location,
         inner_depth / 2,
@@ -226,7 +373,7 @@ bar_left = copy.copy(bar).locate(
 
 _, _, dress_y_right = get_plank_heights(pants_height_right)
 
-bar_right = copy.copy(bar).locate(
+bar_right = copy(bar).locate(
     Location((
         width - plank_horizontal_location,
         inner_depth / 2,
@@ -239,7 +386,7 @@ show(bar_left, bar_right)
 #                            HARDWARE ASSEMBLY                                #
 #                         Includes hangers and bars                           #
 ###############################################################################
-hardware = Compound(children=[
+hardware = Compound([
     rails,
     Compound(bar_left),
     Compound(bar_right)
@@ -261,9 +408,9 @@ with BuildPart() as door_wood:
 with BuildPart() as door_mirror:
     Box(door_width, mirror_thickness, height)
 
-door = Compound(children=[
-    copy.copy(door_wood.part),
-    copy.copy(door_mirror.part).locate(
+door = Compound([
+    copy(door_wood.part),
+    copy(door_mirror.part).locate(
         Location((
             0,
             -thickness/2 - mirror_thickness/2,
@@ -272,7 +419,7 @@ door = Compound(children=[
     )
 ])
 
-door_left = copy.copy(door).locate(
+door_left = copy(door).locate(
     Location((
         plank_horizontal_location,
         -thickness/2 - door_margin,
@@ -282,7 +429,7 @@ door_left = copy.copy(door).locate(
 door_left.color = Color(0.8, 0.8, 0.8)
 door_left.label = "Door"
 
-door_right = mirror(copy.copy(door), about=Plane.YZ).locate(
+door_right = mirror(copy(door), about=Plane.YZ).locate(
     Location((
         width - plank_horizontal_location,
         -thickness/2 - door_margin,
@@ -321,28 +468,28 @@ def create_planks(pants_height):
         pants_side.part.label = "Pants side"
 
     plank_children = [
-        copy.copy(full_plank.part).locate(
+        copy(full_plank.part).locate(
             Location((
                 plank_horizontal_location,
                 inner_depth / 2,
                 bottom_y
             ))
         ),
-        copy.copy(bottom_front_plank.part).locate(
+        copy(bottom_front_plank.part).locate(
             Location((
                 plank_horizontal_location,
                 thickness / 2,
                 bottom_height / 2
             ))
         ),
-        copy.copy(pants_plank.part).locate(
+        copy(pants_plank.part).locate(
             Location((
                 -pants_plank_width / 2 + thickness + plank_width,
                 inner_depth / 2,
                 pants_y
             ))
         ),
-        copy.copy(pants_side.part).locate(
+        copy(pants_side.part).locate(
             Location((
                 plank_width - pants_plank_width + offset + thickness,
                 inner_depth / 2,
@@ -356,7 +503,7 @@ def create_planks(pants_height):
     top_plank_space = (top_section_height + offset) / plank_count
 
     plank_children += [
-        copy.copy(full_plank.part).locate(
+        copy(full_plank.part).locate(
             Location((
                 plank_horizontal_location,
                 inner_depth / 2,
@@ -364,7 +511,7 @@ def create_planks(pants_height):
             ))
         ) for i in range(plank_count)
     ]
-    return Compound(children=plank_children)
+    return Compound(plank_children)
 
 
 planks_left = create_planks(pants_height_left)
@@ -400,35 +547,35 @@ with BuildPart() as sub_plank:
 sub_plank_count = 10
 
 sub_closet_children = [
-    copy.copy(sub_back.part).locate(
+    copy(sub_back.part).locate(
         Location((
             sub_depth - sub_back_thickness,
             sub_width / 2,
             sub_height / 2 + sub_lift + offset
         ))
     ),
-    copy.copy(sub_side.part).locate(
+    copy(sub_side.part).locate(
         Location((
             sub_depth / 2 - sub_back_thickness,
             sub_width - offset,
             sub_height / 2 + sub_lift + offset
         ))
     ),
-    copy.copy(sub_side.part).locate(
+    copy(sub_side.part).locate(
         Location((
             sub_depth / 2 - sub_back_thickness,
             0 + offset,
             sub_height / 2 + sub_lift + offset
         ))
     ),
-    copy.copy(sub_top.part).locate(
+    copy(sub_top.part).locate(
         Location((
             sub_depth / 2 - sub_back_offset,
             sub_width / 2,
             sub_height + sub_lift + thickness
         ))
     ),
-    copy.copy(sub_top.part).locate(
+    copy(sub_top.part).locate(
         Location((
             sub_depth / 2 - sub_back_offset,
             sub_width / 2,
@@ -436,7 +583,7 @@ sub_closet_children = [
         ))
     ),
 ] + [
-    copy.copy(sub_plank.part).locate(
+    copy(sub_plank.part).locate(
         Location((
             sub_plank_depth / 2 - sub_back_offset,
             sub_width / 2,
@@ -448,7 +595,7 @@ sub_closet_children = [
 
 sub_closet = Compound(children=sub_closet_children)
 sub_closet.color = Color(0.7, 0.5, 0.3)
-sub_closet_left = copy.copy(sub_closet).locate(
+sub_closet_left = copy(sub_closet).locate(
     Location((
         width / 2 - sub_depth + sub_back_offset - 2/3 * inner_margin,
         - door_thickness,
@@ -456,7 +603,7 @@ sub_closet_left = copy.copy(sub_closet).locate(
     ))
 )
 
-sub_closet_right = mirror(copy.copy(sub_closet), about=Plane.YZ).locate(
+sub_closet_right = mirror(copy(sub_closet), about=Plane.YZ).locate(
     Location((
         width / 2 + sub_depth - sub_back_offset + 2/3 * inner_margin,
         -depth - offset,
@@ -487,7 +634,7 @@ closet_children = [
     sub_closet_right,
     doors
 ]
-closet = Compound(children=closet_children)
+closet = Compound(closet_children)
 
 
 show(closet_children)
