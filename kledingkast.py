@@ -57,7 +57,7 @@ inner_margin = .6
 wheel_height = 2.8
 rail_height = 1.9
 
-sub_back_thickness = 1.8
+sub_back_thickness = 1.2
 
 # Plank system parameters
 bottom_height = 12.0
@@ -162,20 +162,50 @@ show(dowel_8mm)
 def get_side_face(panel_side, panel_front):
     front_center = panel_front.center()
     all_faces = panel_side.faces()
-    return min(all_faces, key=lambda face: face.center().sub(front_center).length)
+    
+    # Debug information
+    # print(f"Panel front center: {front_center}")
+    # for i, face in enumerate(all_faces):
+    #     print(f"Face {i} center: {face.center()}, distance: {face.center().sub(front_center).length}")
+    
+    # Find the face closest to the front panel
+    closest_face = min(all_faces, key=lambda face: face.center().sub(front_center).length)
+    return closest_face
 
 def decompose_face(side_face):
-    side_face_short_edge = side_face.edges().sort_by(Axis.Y)[0]
-    center = side_face_short_edge.center()
+    # Get all edges on the face
+    edges = side_face.edges()
     
-    long_edge = side_face.edges().sort_by(Axis.Y)[1]
-    length = long_edge.length
-
-    edge_start = long_edge.start_point()
-    edge_end = long_edge.end_point()
+    # Identify the longest and shortest edges to determine orientation
+    sorted_edges = sorted(edges, key=lambda e: e.length)
+    
+    # Get the two longest edges (should be parallel to each other)
+    long_edge1 = sorted_edges[-1]  # Longest edge
+    long_edge2 = sorted_edges[-2]  # Second longest edge (should be parallel)
+    
+    # Get center of the face
+    center = side_face.center()
+    
+    # Length is from the longest edge
+    length = long_edge1.length
+    
+    # Direction is along the longest edge
+    edge_start = long_edge1.start_point()
+    edge_end = long_edge1.end_point()
     direction = (edge_end - edge_start).normalized()
-    normal = side_face.normal_at(side_face.center())
-    return center, direction, normal, length
+    
+    # For better centering, find the midline between the two long edges
+    e1_mid = (long_edge1.start_point() + long_edge1.end_point()) * 0.5
+    e2_mid = (long_edge2.start_point() + long_edge2.end_point()) * 0.5
+    
+    # Use the midpoint between the two long edges as the center line
+    # This ensures better centering of dowels along the face
+    adjusted_center = (e1_mid + e2_mid) * 0.5
+    
+    # Normal is perpendicular to the face
+    normal = side_face.normal_at(center)
+    
+    return adjusted_center, direction, normal, length
 
 def position_dowel(pos, normal, front_thickness, length, is_center_aligned=True):
     if is_center_aligned:
@@ -208,23 +238,36 @@ def create_between_panels(part_factory, part_length, panel_side, panel_front, sp
     side_face = get_side_face(panel_side, panel_front)
     center, direction, normal, length = decompose_face(side_face)
 
-    dowel_count = int(length / spacing) - 1
-
+    # Calculate how many dowels we need
+    dowel_count = max(1, int(length / spacing) - 1)
+    
+    # Calculate the total space taken by the dowels + spacing
+    total_length = spacing * (dowel_count - 1)
+    
+    # Calculate offset from edge to center the dowels
+    edge_offset = (length - total_length) / 2
+    
+    # Position for the penetration depth
     pos = position_dowel(Vector(
         center.X,
         center.Y,
         center.Z
     ), normal, front_thickness, part_length, is_center_aligned)
+    
     rotation_axis, rotation_angle = get_rotation(normal)
-    pos = pos + direction * offset
-
+    
+    # Start position for the first dowel at the centered starting point
+    start_pos = pos - direction * (total_length / 2) + direction * offset
+    
     dowels = []
     for i in range(dowel_count):
-        pos = pos + direction * spacing
+        # Calculate position for each dowel
+        dowel_pos = start_pos + direction * (i * spacing)
         dowel = part_factory().locate(
-            Location(pos, rotation_axis, rotation_angle)
+            Location(dowel_pos, rotation_axis, rotation_angle)
         )
         dowels.append(dowel)
+    
     return Compound(dowels)
 
 # %%
@@ -233,7 +276,12 @@ def create_between_panels(part_factory, part_length, panel_side, panel_front, sp
 #              Adding dowels between panels for extra strength                #
 ###############################################################################
 def create_dowels_between_panels(panel_side, panel_front, spacing=20.0, front_thickness=1.8):
-    return create_between_panels(lambda: WoodenDowel(dowel_size), dowel_length, panel_side, panel_front, spacing=spacing, front_thickness=front_thickness)
+    dow_sz = dowel_size
+    dow_len = dowel_length
+    if front_thickness < 1.8:
+        dow_sz = "6mm"
+        dow_len = 3.0
+    return create_between_panels(lambda: WoodenDowel(dow_sz), dow_len, panel_side, panel_front, spacing=spacing, front_thickness=front_thickness)
 
 # Example: Create two panels
 # rotate and locate the panels
@@ -269,11 +317,11 @@ def make_frame():
         side.part.label = "Side panel"
 
     with BuildPart() as top:
-        Box(width, inner_depth, thickness)
+        Box(width, depth, thickness)
         top.part.label = "Top panel"
 
     with BuildPart() as back:
-        Box(width, back_thickness, height)
+        Box(width, back_thickness, height - thickness)
         back.part.label = "Back panel"
 
     # Define panel positions
@@ -281,8 +329,8 @@ def make_frame():
     middle_left_pos = (plank_width + thickness + offset, inner_depth / 2, side_height / 2)
     middle_right_pos = (width - thickness - offset - plank_width, inner_depth / 2, side_height / 2)
     right_side_pos = (width - offset, inner_depth / 2, side_height / 2)
-    top_pos = (width / 2, inner_depth / 2, side_height + offset)
-    back_pos = (width / 2, depth - back_offset, height / 2)
+    top_pos = (width / 2, depth / 2, side_height + offset)
+    back_pos = (width / 2, depth - back_offset, (height - thickness) / 2)
 
     frame_left_side = copy(side.part).locate(Location(left_side_pos))
     frame_middle_left = copy(side.part).locate(Location(middle_left_pos))
@@ -302,6 +350,7 @@ def make_frame():
     middle_right_back_dowels = create_dowels_between_panels(frame_middle_right, frame_back, spacing=20, front_thickness=back_thickness)
     right_back_dowels = create_dowels_between_panels(frame_right_side, frame_back, spacing=20, front_thickness=back_thickness)
 
+    top_back_dowels = create_dowels_between_panels(frame_back, frame_top, spacing=20, front_thickness=back_thickness)
     # show(left_top_dowels)
 
     return Compound(children=[
@@ -318,7 +367,8 @@ def make_frame():
         left_back_dowels,
         middle_left_back_dowels,
         middle_right_back_dowels,
-        right_back_dowels
+        right_back_dowels,
+        top_back_dowels
     ]) 
 
 # Create the frame
@@ -351,8 +401,8 @@ def create_rails():
             )
         )).locate(
             Location((
-                width / 2 - sub_depth / 2 + sub_back_offset - 2/3 * inner_margin - 2.2,
-                inner_depth + 3.2,
+                width / 2 - sub_depth / 2 + sub_back_offset - 2/3 * inner_margin - 22,
+                inner_depth + 32,
                 side_height
             ))
         ),
@@ -381,14 +431,6 @@ show(rails)
 ###############################################################################
 #                               HANGING BARS                                  #
 ###############################################################################
-
-
-# Function to calculate plank heights (define this if not already defined)
-def get_plank_heights(pants_height):
-    # Replace with your actual calculation logic
-    return 0, 0, pants_height + 100  # Example values
-
-
 with BuildPart() as bar_cylinder:
     Cylinder(bar_width / 2, plank_width, rotation=(0, 90, 0))
 
@@ -581,74 +623,103 @@ show(planks_left, planks_right)
 #                           SUB CLOSET ASSEMBLY                               #
 #                 Creates the smaller storage compartments                    #
 ###############################################################################
-with BuildPart() as sub_back:
-    Box(sub_back_thickness, sub_width, sub_height)
-    sub_back.part.label = "Sub closet back"
+def create_sub_closet():
+    with BuildPart() as sub_back:
+        Box(sub_back_thickness, sub_width, sub_height)
+        sub_back.part.label = "Sub closet back"
 
-with BuildPart() as sub_side:
-    Box(sub_depth - sub_back_thickness, thickness, sub_height)
-    sub_side.part.label = "Sub closet side"
+    with BuildPart() as sub_side:
+        Box(sub_depth - sub_back_thickness, thickness, sub_height)
+        sub_side.part.label = "Sub closet side"
 
-with BuildPart() as sub_top:
-    Box(sub_depth,  sub_width, thickness)
-    sub_top.part.label = "Sub closet top/bottom"
+    with BuildPart() as sub_bottom_top:
+        Box(sub_depth,  sub_width, thickness)
+        sub_bottom_top.part.label = "Sub closet top/bottom"
 
-with BuildPart() as sub_plank:
-    Box(sub_plank_depth, sub_plank_width, thickness)
-    sub_plank.part.label = "Sub closet plank"
+    with BuildPart() as sub_plank:
+        Box(sub_plank_depth, sub_plank_width, thickness)
+        sub_plank.part.label = "Sub closet plank"
 
-sub_plank_count = 10
-
-sub_closet_children = [
-    copy(sub_back.part).locate(
+    # locate the sub closet parts
+    sub_back = copy(sub_back.part).locate(
         Location((
             sub_depth - sub_back_thickness,
             sub_width / 2,
             sub_height / 2 + sub_lift + offset
         ))
-    ),
-    copy(sub_side.part).locate(
+    )
+    sub_left = copy(sub_side.part).locate(
         Location((
             sub_depth / 2 - sub_back_thickness,
             sub_width - offset,
             sub_height / 2 + sub_lift + offset
         ))
-    ),
-    copy(sub_side.part).locate(
+    )
+    sub_right = copy(sub_side.part).locate(
         Location((
             sub_depth / 2 - sub_back_thickness,
             0 + offset,
             sub_height / 2 + sub_lift + offset
         ))
-    ),
-    copy(sub_top.part).locate(
+    )
+    sub_top = copy(sub_bottom_top.part).locate(
         Location((
             sub_depth / 2 - sub_back_offset,
             sub_width / 2,
             sub_height + sub_lift + thickness
         ))
-    ),
-    copy(sub_top.part).locate(
+    )
+    sub_bottom = copy(sub_bottom_top.part).locate(
         Location((
             sub_depth / 2 - sub_back_offset,
             sub_width / 2,
             sub_lift
         ))
-    ),
-] + [
-    copy(sub_plank.part).locate(
-        Location((
-            sub_plank_depth / 2 - sub_back_offset,
-            sub_width / 2,
-            (i + 1) * sub_height / sub_plank_count + sub_lift + thickness
-        ))
-    ) for i in range(sub_plank_count) if i < sub_plank_count - 1
-]
+    )
+
+    dowels_top_left = create_dowels_between_panels(sub_left, sub_top, spacing=8)
+    dowels_top_right = create_dowels_between_panels(sub_right, sub_top, spacing=8)
+    dowels_top_back = create_dowels_between_panels(sub_back, sub_top, spacing=10)
+    
+    dowels_bottom_left = create_dowels_between_panels(sub_left, sub_bottom, spacing=8)
+    dowels_bottom_right = create_dowels_between_panels(sub_right, sub_bottom, spacing=8)
+    dowels_bottom_back = create_dowels_between_panels(sub_back, sub_bottom, spacing=10)
+
+    dowels_left_back = create_dowels_between_panels(sub_left, sub_back, spacing=20)
+    dowels_right_back = create_dowels_between_panels(sub_right, sub_back, spacing=20)
+
+    sub_plank_count = 10
+
+    sub_closet_children = [
+        sub_back,
+        sub_left,
+        sub_right,
+        sub_top,
+        sub_bottom,
+        dowels_top_left,
+        dowels_top_right,
+        dowels_top_back,
+        dowels_bottom_left,
+        dowels_bottom_right,
+        dowels_bottom_back,
+        dowels_left_back,
+        dowels_right_back
+    ] + [
+        copy(sub_plank.part).locate(
+            Location((
+                sub_plank_depth / 2 - sub_back_offset,
+                sub_width / 2,
+                (i + 1) * sub_height / sub_plank_count + sub_lift + thickness
+            ))
+        ) for i in range(sub_plank_count) if i < sub_plank_count - 1
+    ]
 
 
-sub_closet = Compound(children=sub_closet_children)
-sub_closet.color = Color(0.7, 0.5, 0.3)
-sub_closet_left = copy(sub_closet).locate(
+    sub_closet = Compound(children=sub_closet_children)
+    sub_closet.color = Color(0.7, 0.5, 0.3)
+    return sub_closet
+
+sub_closet_left = create_sub_closet().locate(
     Location((
         width / 2 - sub_depth + sub_back_offset - 2/3 * inner_margin,
         - door_thickness,
@@ -656,7 +727,7 @@ sub_closet_left = copy(sub_closet).locate(
     ))
 )
 
-sub_closet_right = mirror(copy(sub_closet), about=Plane.YZ).locate(
+sub_closet_right = mirror(create_sub_closet(), about=Plane.YZ).locate(
     Location((
         width / 2 + sub_depth - sub_back_offset + 2/3 * inner_margin,
         -depth - offset,
@@ -669,7 +740,6 @@ show(sub_closet_left, sub_closet_right)
 
 
 # %%
-
 ###############################################################################
 #                          FINAL CLOSET ASSEMBLY                              #
 #                    Combines and mirrors all components                      #
