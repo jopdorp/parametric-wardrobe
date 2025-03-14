@@ -6,6 +6,13 @@
 # For more details, see https://marketplace.visualstudio.com/items?itemName=ms-toolsai.jupyter
 
 # %%
+###############################################################################
+#                                CLOSET DESIGN                                 #
+#                   Customizable closet design with parameters                #
+#                               and hardware setup                             #
+###############################################################################
+
+# Import required classes and functions
 from build123d import (
     BuildPart,
     Box,
@@ -30,47 +37,50 @@ from ocp_vscode import show
 # Manually set port
 from ocp_vscode.comms import CMD_PORT, set_port
 set_port(3939)  # Use a specific port number
+
+
+# %%
 ###############################################################################
 #                              GLOBAL PARAMETERS                              #
 #                    CUSTOMIZE THE SIZES TO FIT YOUR NEEDS                    #
 ###############################################################################
-thickness = 18
-back_thickness = 12
+thickness = 1.8
+back_thickness = 1.2
 
-width = 1745
-height = 2645
-depth_budget = 590
-mirror_thickness = 4
-sub_depth = 3005
-inner_margin = 6
+width = 174.5
+height = 264.5
+depth_budget = 59.0
+mirror_thickness = .4
+sub_depth = 30.5
+inner_margin = .6
 
-wheel_height = 28
-rail_height = 19
+wheel_height = 2.8
+rail_height = 1.9
 
-sub_back_thickness = 18
+sub_back_thickness = 1.8
 
 # Plank system parameters
-bottom_height = 120
-pants_width = 345
-dress_height = 1025
-bar_height = 30
-bar_width = 15
-bar_spacing = 45
+bottom_height = 12.0
+pants_width = 34.5
+dress_height = 102.5
+bar_height = 3.0
+bar_width = 1.5
+bar_spacing = 4.5
 
-pants_height_left = 730
-pants_height_right = 630
+pants_height_left = 73.0
+pants_height_right = 63.0
 
 # Doors
-door_margin = 2
+door_margin = .2
 
 # Hardware parameters
 dowel_size = "8mm"
 
 # Define standard dowel sizes based on 12mm & 18mm wood thickness
 METRIC_DOWEL_SIZES = {
-    "6mm": (6, 30),  # Diameter, Length
-    "8mm": (8, 40),
-    "10mm": (10, 50),
+    "6mm": (.6, 3.0),  # Diameter, Length
+    "8mm": (.8, 4.0),
+    "10mm": (1.0, 5.0),
 }
 
 # Derived parameters
@@ -108,6 +118,10 @@ def get_plank_heights(pants_height):
     return bottom_y, pants_y, dress_y
 
 # %%
+###############################################################################
+#                             WOODEN DOWEL CLASS                              #
+#                 Create a wooden dowel with rounded ends                     #
+###############################################################################
 
 class WoodenDowel(Part):
     def __init__(self, size: str):
@@ -140,12 +154,10 @@ dowel_8mm = WoodenDowel("8mm")
 show(dowel_8mm)
 
 # %%
-
 ###############################################################################
 #                           HARDWARE PLACEMENT                                #
 #              Adding hardware along edges where panels connect               #
 ###############################################################################
-# %%
 
 def get_side_face(panel_side, panel_front):
     front_center = panel_front.center()
@@ -173,14 +185,26 @@ def position_dowel(pos, normal, front_thickness, length, is_center_aligned=True)
 
 def get_rotation(normal):
     rotation_angle = 0
-    rotation_axis = (0, 0, 0)
     z_axis = Vector(0, 0, 1)
+    
+    # Calculate angle between vectors
+    rotation_angle = z_axis.get_angle(normal)
+    
+    # Handle parallel vectors case
+    if abs(abs(z_axis.dot(normal)) - 1.0) < 1e-10:  # Vectors are parallel
+        # If vectors point in same direction, no rotation needed
+        if z_axis.dot(normal) > 0:
+            return Vector(1, 0, 0), 0
+        # If vectors point in opposite directions, rotate 180° around X axis
+        else:
+            return Vector(1, 0, 0), 180
+    
+    # Normal case - vectors are not parallel
     rotation_axis = z_axis.cross(normal)
     rotation_axis = rotation_axis.normalized()
-    rotation_angle = z_axis.get_angle(normal)
     return rotation_axis, rotation_angle
 
-def create_between_panels(part_factory, part_length, panel_side, panel_front, spacing=200, front_thickness=18, is_center_aligned=True, offset=0):
+def create_between_panels(part_factory, part_length, panel_side, panel_front, spacing=20.0, front_thickness=1.8, is_center_aligned=True, offset=.0):
     side_face = get_side_face(panel_side, panel_front)
     center, direction, normal, length = decompose_face(side_face)
 
@@ -203,35 +227,33 @@ def create_between_panels(part_factory, part_length, panel_side, panel_front, sp
         dowels.append(dowel)
     return Compound(dowels)
 
-# Example: Create two panels
-with BuildPart() as panel_side:
-    Box(thickness, 2000, 200)
-    panel_side.part.label = "Side panel"
-
-with BuildPart() as panel_front:
-    Box(thickness, 2000, 200)
-    panel_front.part.label = "Front panel"
-
-# rotate and locate the panels
-panel_side = copy(panel_side.part).rotate(axis=Axis.Y, angle=90)
-panel_front = copy(panel_front.part).locate(Location((110, 0, 90)))
-
 # %%
 ###############################################################################
 #                             DOWEL PLACEMENT                                 #
 #              Adding dowels between panels for extra strength                #
 ###############################################################################
+def create_dowels_between_panels(panel_side, panel_front, spacing=20.0, front_thickness=1.8):
+    return create_between_panels(lambda: WoodenDowel(dowel_size), dowel_length, panel_side, panel_front, spacing=spacing, front_thickness=front_thickness)
 
-def create_dowels_between_panels(panel_side, panel_front):
-    return create_between_panels(lambda: WoodenDowel(dowel_size), dowel_length, panel_side, panel_front, front_thickness=thickness)
+# Example: Create two panels
+# rotate and locate the panels
+with BuildPart() as panel_side:
+    Box(thickness, 200.0, 20.0)
+    panel_side.part.label = "Side panel"
+
+with BuildPart() as panel_front:
+    Box(thickness, 200.0, 20.0)
+    panel_front.part.label = "Front panel"
+
+panel_side = copy(panel_side.part).rotate(axis=Axis.Y, angle=90)
+panel_front = copy(panel_front.part).locate(Location((11.0, .0, 9.0)))
 
 dowels = create_dowels_between_panels(panel_side, panel_front)
-show([panel_front, panel_side, dowels])
 
 def create_screws_between_panels(panel_side, panel_front):
     def create_screw():
-        return CounterSunkScrew(fastener_type="iso14581", size="M4-0.7", length=35)
-    return create_between_panels(create_screw, 35, panel_side, panel_front, spacing=400, front_thickness=thickness, is_center_aligned=False, offset=100)
+        return CounterSunkScrew(fastener_type="iso14581", size="M4-0.7", length=35).scale(.1)
+    return create_between_panels(create_screw, 3.5, panel_side, panel_front, spacing=40.0, front_thickness=thickness, is_center_aligned=False, offset=10.0)
 
 screws = create_screws_between_panels(panel_side, panel_front)
 show([panel_front, panel_side, screws, dowels])
@@ -270,15 +292,15 @@ def make_frame():
     frame_back = copy(back.part).locate(Location(back_pos))
 
 
-    # left_top_dowels = create_dowels_between_panels(frame_left_side, frame_top)
-    # middle_left_top_dowels = create_dowels_between_panels(frame_middle_left, frame_top)
-    # middle_right_top_dowels = create_dowels_between_panels(frame_middle_right, frame_top)
-    # right_top_dowels = create_dowels_between_panels(frame_right_side, frame_top)
+    left_top_dowels = create_dowels_between_panels(frame_left_side, frame_top, spacing=15)
+    middle_left_top_dowels = create_dowels_between_panels(frame_middle_left, frame_top, spacing=15)
+    middle_right_top_dowels = create_dowels_between_panels(frame_middle_right, frame_top, spacing=15)
+    right_top_dowels = create_dowels_between_panels(frame_right_side, frame_top, spacing=15)
 
-    # left_back_dowels = create_dowels_between_panels(frame_left_side, frame_back, spacing=20, front_thickness=back_thickness)
-    # middle_left_back_dowels = create_dowels_between_panels(frame_middle_left, frame_back, spacing=20, front_thickness=back_thickness)
-    # middle_right_back_dowels = create_dowels_between_panels(frame_middle_right, frame_back, spacing=20, front_thickness=back_thickness)
-    # right_back_dowels = create_dowels_between_panels(frame_right_side, frame_back, spacing=20, front_thickness=back_thickness)
+    left_back_dowels = create_dowels_between_panels(frame_left_side, frame_back, spacing=20, front_thickness=back_thickness)
+    middle_left_back_dowels = create_dowels_between_panels(frame_middle_left, frame_back, spacing=20, front_thickness=back_thickness)
+    middle_right_back_dowels = create_dowels_between_panels(frame_middle_right, frame_back, spacing=20, front_thickness=back_thickness)
+    right_back_dowels = create_dowels_between_panels(frame_right_side, frame_back, spacing=20, front_thickness=back_thickness)
 
     # show(left_top_dowels)
 
@@ -289,14 +311,14 @@ def make_frame():
         frame_right_side,
         frame_top,
         frame_back,
-        # left_top_dowels,
-        # middle_left_top_dowels,
-        # middle_right_top_dowels,
-        # right_top_dowels,
-        # left_back_dowels,
-        # middle_left_back_dowels,
-        # middle_right_back_dowels,
-        # right_back_dowels
+        left_top_dowels,
+        middle_left_top_dowels,
+        middle_right_top_dowels,
+        right_top_dowels,
+        left_back_dowels,
+        middle_left_back_dowels,
+        middle_right_back_dowels,
+        right_back_dowels
     ]) 
 
 # Create the frame
@@ -310,50 +332,63 @@ show(frame)
 #                      Connects the subclosets to the frame                   #
 ###############################################################################
 
-sub_rail = import_step("rail.stp")
+def create_rails():
+    sub_rail = import_step("rail.stp")
 
-sub_rail_right = Part(sub_rail.children[0])
-sub_rail_left = Part(sub_rail.children[1])
+    sub_rail_right = Part(sub_rail.children[0])
+    sub_rail_left = Part(sub_rail.children[1])
 
-sub_rail_right = sub_rail_right.rotate(axis=Axis.X, angle=-90)
-sub_rail_left = sub_rail_left.rotate(axis=Axis.X, angle=-90)
+    sub_rail_right = sub_rail_right.rotate(axis=Axis.X, angle=-90)
+    sub_rail_left = sub_rail_left.rotate(axis=Axis.X, angle=-90)
 
-rails = Compound(children=[
-    copy(sub_rail_left).transform_geometry(Matrix(
-        (
-            (0.1, 0, 0, 0),
-            (0, 0.06, 0, 0),
-            (0, 0, 0.1, 0),
-            (0, 0, 0, 1)
+    return Compound(children=[
+        copy(sub_rail_left).transform_geometry(Matrix(
+            (
+                (0.1, 0, 0, 0),
+                (0, 0.06, 0, 0),
+                (0, 0, 0.1, 0),
+                (0, 0, 0, 1)
+            )
+        )).locate(
+            Location((
+                width / 2 - sub_depth / 2 + sub_back_offset - 2/3 * inner_margin - 2.2,
+                inner_depth + 3.2,
+                side_height
+            ))
+        ),
+        copy(sub_rail_right).transform_geometry(Matrix(
+            (
+                (0.1, 0, 0, 0),
+                (0, 0.06, 0, 0),
+                (0, 0, 0.1, 0),
+                (0, 0, 0, 1)
+            )
+        )).locate(
+            Location((
+                width / 2 + sub_depth / 2 - sub_back_offset + 2/3 * inner_margin,
+                inner_depth - 6,
+                side_height
+            ))
         )
-    )).locate(
-        Location((
-            width / 2 - sub_depth / 2 + sub_back_offset - 2/3 * inner_margin - 22,
-            inner_depth + 32,
-            side_height
-        ))
-    ),
-    copy(sub_rail_right).transform_geometry(Matrix(
-        (
-            (0.1, 0, 0, 0),
-            (0, 0.06, 0, 0),
-            (0, 0, 0.1, 0),
-            (0, 0, 0, 1)
-        )
-    )).locate(
-        Location((
-            width / 2 + sub_depth / 2 - sub_back_offset + 2/3 * inner_margin,
-            inner_depth - 6,
-            side_height
-        ))
-    )
-])
+    ])
+
+if not "rails" in globals():
+    global rails
+    rails = create_rails()
 show(rails)
 
 # %%
 ###############################################################################
 #                               HANGING BARS                                  #
 ###############################################################################
+
+
+# Function to calculate plank heights (define this if not already defined)
+def get_plank_heights(pants_height):
+    # Replace with your actual calculation logic
+    return 0, 0, pants_height + 100  # Example values
+
+
 with BuildPart() as bar_cylinder:
     Cylinder(bar_width / 2, plank_width, rotation=(0, 90, 0))
 
@@ -653,7 +688,6 @@ closet_children = [
     doors
 ]
 closet = Compound(closet_children)
-
 
 show(closet_children)
 
